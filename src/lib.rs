@@ -13,17 +13,21 @@ pub trait ReadRegister {
 pub struct Control {
     in1: bool,
     in2: bool,
+    // Output voltage in volts that the driver will attempt to match (1.29V - 5.06V)
+    vout: f32,
 }
 impl Control {
     const ADDRESS: u8 = 0x00;
-    pub const COAST: Self = Self { in1: false, in2: false };
-    pub const REVERSE: Self = Self { in1: false, in2: true };
-    pub const FORWARD: Self = Self { in1: true, in2: false };
-    pub const BRAKE: Self = Self { in1: true, in2: true };
+    pub const COAST: Self = Self { in1: false, in2: false, vout: 3.2 };
+    pub const REVERSE: Self = Self { in1: false, in2: true, vout: 3.2 };
+    pub const FORWARD: Self = Self { in1: true, in2: false, vout: 3.2 };
+    pub const BRAKE: Self = Self { in1: true, in2: true, vout: 3.2 };
 }
 impl WriteRegister for Control {
     fn write(&self, i2c: &mut I2c) -> Result<()> {
-        let write_reg = (u8::from(self.in2) << 1) | u8::from(self.in1);
+        // VOUT = 4 x VREF x (VSET +1) / 64, where VREF is the internal 1.285-V 
+        let voltage_enc = (self.vout.clamp(1.29, 5.06) / 0.0803) as u8;
+        let write_reg = (voltage_enc << 2) | (u8::from(self.in2) << 1) | u8::from(self.in1);
         i2c.smbus_write_byte(Self::ADDRESS, write_reg)?;
         Ok(())
     }
