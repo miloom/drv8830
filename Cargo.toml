@@ -4,4 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rppal = "0.18.0"
+rppal = { version = "0.18.0", optional = true }
+embedded-hal = { version = "1.0.0", optional = true }
+
+[features]
+default = ["rpi"]
+rpi = ["dep:rppal"]
+embedded = ["dep:embedded-hal"]
