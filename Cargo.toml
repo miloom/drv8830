@@ -7,7 +7,12 @@ edition = "2021"
 rppal = { version = "0.18.0", optional = true }
 embedded-hal = { version = "1.0.0", optional = true }
 
+[dependencies.arduino-hal]
+git = "https://github.com/rahix/avr-hal"
+features = ["arduino-uno"]
+
 [features]
 default = ["rpi"]
-rpi = ["dep:rppal"]
+rpi = ["dep:rppal", "std"]
+std = []
 embedded = ["dep:embedded-hal"]
