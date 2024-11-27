@@ -46,33 +46,30 @@ pub struct Control {
     in1: bool,
     in2: bool,
     // Output voltage in volts that the driver will attempt to match (1.29V - 5.06V)
-    vout: f32,
     pub speed_mult: f32,
 }
 impl Control {
     const ADDRESS: u8 = 0x00;
+    const MAX_VOLTAGE: f32 = 5.06;
+    const MIN_VOLTAGE: f32 = 0.8;
     pub const COAST: Self = Self {
         in1: false,
         in2: false,
-        vout: 3.2,
         speed_mult: 1.0,
     };
     pub const REVERSE: Self = Self {
         in1: false,
         in2: true,
-        vout: 3.2,
         speed_mult: 1.0,
     };
     pub const FORWARD: Self = Self {
         in1: true,
         in2: false,
-        vout: 3.2,
         speed_mult: 1.0,
     };
     pub const BRAKE: Self = Self {
         in1: true,
         in2: true,
-        vout: 3.2,
         speed_mult: 1.0,
     };
 }
@@ -80,7 +77,8 @@ impl WriteRegister for Control {
     #[cfg(feature = "rpi")]
     fn write(&self, i2c: &mut I2c) -> Result<()> {
         // VOUT = 4 x VREF x (VSET +1) / 64, where VREF is the internal 1.285-V
-        let voltage_enc = (self.vout.clamp(1.29, 5.06) / 0.0803) as u8;
+        let vout = (Self::MAX_VOLTAGE - Self::MIN_VOLTAGE) * self.speed_mult.clamp(0.0, 100.0) + Self::MIN_VOLTAGE;
+        let voltage_enc = (vout / 0.0803) as u8;
         let write_reg = (voltage_enc << 2) | (u8::from(self.in2) << 1) | u8::from(self.in1);
         i2c.smbus_write_byte(Self::ADDRESS, write_reg)?;
         Ok(())
@@ -89,7 +87,8 @@ impl WriteRegister for Control {
     #[cfg(feature = "embedded")]
     fn write(&self, i2c: &mut I2c, chip_addr: u8) -> Result<()> {
         // VOUT = 4 x VREF x (VSET +1) / 64, where VREF is the internal 1.285-V
-        let voltage_enc = (self.vout.clamp(1.29, 5.06) / 0.0803) as u8;
+        let vout = (Self::MAX_VOLTAGE - Self::MIN_VOLTAGE) * self.speed_mult.clamp(0.0, 100.0) + Self::MIN_VOLTAGE;
+        let voltage_enc = (vout / 0.0803) as u8;
         let write_reg = (voltage_enc << 2) | (u8::from(self.in2) << 1) | u8::from(self.in1);
         i2c.write(chip_addr, &[Self::ADDRESS, write_reg])?;
         Ok(())
