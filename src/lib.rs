@@ -1,42 +1,14 @@
 #![no_std]
-#[cfg(all(feature = "rpi", feature = "embedded"))]
-compile_error!("feature \"rpi\" and feature \"embedded\" cannot be enabled at the same time");
-#[cfg(all(feature = "embedded", feature = "std"))]
-compile_error!("feature \"embedded\" and feature \"std\" cannot be enabled at the same time");
-
-#[cfg(feature = "std")]
-extern crate std;
-#[cfg(feature = "embedded")]
-use arduino_hal::I2c;
-#[cfg(feature = "embedded")]
-use arduino_hal::prelude::*;
-
-#[cfg(feature = "embedded")]
-use core::prelude::rust_2021::*;
-#[cfg(feature = "rpi")]
-use rppal::i2c::Error;
-#[cfg(feature = "rpi")]
-use rppal::i2c::I2c;
-
-#[cfg(feature = "rpi")]
-pub type Result<T> = std::result::Result<T, Error>;
-#[cfg(feature = "embedded")]
-pub type Result<T> = core::result::Result<T, arduino_hal::i2c::Error>;
+use embedded_hal::i2c::I2c;
 
 pub trait WriteRegister {
-    #[cfg(feature = "rpi")]
-    fn write(&self, i2c: &mut I2c) -> Result<()>;
-    #[cfg(feature = "embedded")]
-    fn write(&self, i2c: &mut I2c, chip_addr: u8) -> Result<()>;
+    // #[cfg(feature = "rpi")]
+    // fn write(&self, i2c: &mut I2c) -> Result<()>;
+    fn write<I: I2c>(&self, i2c: &mut I, chip_addr: u8) -> Result<(), I::Error>;
 }
 pub trait ReadRegister {
-    #[cfg(feature = "rpi")]
-    fn new(i2c: &mut I2c) -> Result<Self>
-    where
-        Self: Sized;
 
-    #[cfg(feature = "embedded")]
-    fn new(i2c: &mut I2c, chip_addr: u8) -> Result<Self>
+    fn new<I: I2c>(i2c: &mut I, chip_addr: u8) -> Result<Self, I::Error>
     where
         Self: Sized;
 }
@@ -74,18 +46,7 @@ impl Control {
     };
 }
 impl WriteRegister for Control {
-    #[cfg(feature = "rpi")]
-    fn write(&self, i2c: &mut I2c) -> Result<()> {
-        // VOUT = 4 x VREF x (VSET +1) / 64, where VREF is the internal 1.285-V
-        let vout = (Self::MAX_VOLTAGE - Self::MIN_VOLTAGE) * self.speed_mult.clamp(0.0, 100.0) + Self::MIN_VOLTAGE;
-        let voltage_enc = (vout / 0.0803) as u8;
-        let write_reg = (voltage_enc << 2) | (u8::from(self.in2) << 1) | u8::from(self.in1);
-        i2c.smbus_write_byte(Self::ADDRESS, write_reg)?;
-        Ok(())
-    }
-
-    #[cfg(feature = "embedded")]
-    fn write(&self, i2c: &mut I2c, chip_addr: u8) -> Result<()> {
+    fn write<I: I2c>(&self, i2c: &mut I, chip_addr: u8) -> Result<(), I::Error> {
         // VOUT = 4 x VREF x (VSET +1) / 64, where VREF is the internal 1.285-V
         let vout = (Self::MAX_VOLTAGE - Self::MIN_VOLTAGE) * self.speed_mult.clamp(0.0, 100.0) + Self::MIN_VOLTAGE;
         let voltage_enc = (vout / 0.0803) as u8;
@@ -114,23 +75,8 @@ impl Fault {
     const ADDRESS: u8 = 0x01;
 }
 impl ReadRegister for Fault {
-    #[cfg(feature = "rpi")]
-    fn new(i2c: &mut I2c) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        let read_buf = i2c.smbus_read_byte(Self::ADDRESS)?;
-        Ok(Self {
-            clear: (read_buf >> 7) != 0,
-            i_limit: ((read_buf >> 4) & 1) != 0,
-            ots: ((read_buf >> 3) & 1) != 0,
-            uvlo: ((read_buf >> 2) & 1) != 0,
-            ocp: ((read_buf >> 1) & 1) != 0,
-            fault: (read_buf & 1) != 0,
-        })
-    }
-    #[cfg(feature = "embedded")]
-    fn new(i2c: &mut I2c, chip_addr: u8) -> Result<Self>
+
+    fn new<I: I2c>(i2c: &mut I, chip_addr: u8) -> Result<Self, I::Error>
     where
         Self: Sized,
     {
@@ -148,20 +94,8 @@ impl ReadRegister for Fault {
     }
 }
 impl WriteRegister for Fault {
-    #[cfg(feature = "rpi")]
-    fn write(&self, i2c: &mut I2c) -> Result<()> {
-        let write_buf = (u8::from(self.clear) << 7)
-            | (u8::from(self.i_limit) << 4)
-            | (u8::from(self.ots) << 3)
-            | (u8::from(self.uvlo) << 2)
-            | (u8::from(self.ocp) << 1)
-            | u8::from(self.fault);
-        i2c.smbus_write_byte(Self::ADDRESS, write_buf)?;
-        Ok(())
-    }
 
-    #[cfg(feature = "embedded")]
-    fn write(&self, i2c: &mut I2c, chip_addr: u8) -> Result<()> {
+    fn write<I: I2c>(&self, i2c: &mut I, chip_addr: u8) -> Result<(), I::Error> {
         let write_buf = (u8::from(self.clear) << 7)
             | (u8::from(self.i_limit) << 4)
             | (u8::from(self.ots) << 3)
